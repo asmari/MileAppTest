@@ -12,4 +12,12 @@ class Transactions extends Model
     {
         return $this->hasOne(Connotes::class,'transaction_id','transaction_id');
     }
+    public function origin_data()
+    {
+        return $this->hasOne(OriginData::class,'transaction_id','transaction_id');
+    }
+    public function destination_data()
+    {
+        return $this->hasOne(DestinationData::class,'transaction_id','transaction_id');
+    }
 }

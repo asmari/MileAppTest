@@ -5,13 +5,11 @@ use App\ApiCode;
 use App\Connotes;
 use App\Transactions;
 use Carbon\Carbon;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use MarcinOrlowski\ResponseBuilder\ResponseBuilder as RB;
-use PhpParser\Node\Stmt\DeclareDeclare;
 
 class PackageController extends Controller{
 
@@ -63,7 +61,7 @@ class PackageController extends Controller{
         }
 
         $user = auth()->user();
-
+        $customer = $user->customer_id()->first();
         DB::beginTransaction();
         try {
 //        Insert Transaction Data
@@ -76,6 +74,15 @@ class PackageController extends Controller{
 
 //            Insert Koli Data
             DB::table('koli_data')->insert($this->generateKoliData($request->koli_data,$connote));
+
+//            Insert Locations Data
+            DB::table('locations')->insert($this->generateLocationData($transaction, $customer->customer_name));
+
+//            Insert Origin Data
+            DB::table('origin_data')->insertGetId($this->generateOriginData($request,$transaction));
+
+//            Insert Destination Data
+            DB::table('destination_data')->insertGetId($this->generateDestinationData($request,$transaction));
 
 //            Commit if no error
             DB::commit();
@@ -113,6 +120,10 @@ class PackageController extends Controller{
             $transactions->connotes = $transactions->connotes->first();
 //            Get Koli Data
             $transactions->koli_data =  $transactions->connotes()->first()->koliData->all();
+//            Get Origin Data
+            $transactions->origin_data =  $transactions->origin_data->first();
+//            Get Destination Data
+            $transactions->destination_data =  $transactions->destination_data->first();
 
             return RB::success($transactions, ApiCode::SUCCESS_OK);
         }
@@ -158,7 +169,27 @@ class PackageController extends Controller{
             'connote.id_source_tariff' => ['required'],
 
 //            validate koli
-            'koli_data' => ['required']
+            'koli_data' => ['required'],
+
+//            Validate Origin Data
+            'origin_data'=>['required'],
+            'origin_data.customer_name'=>['required'],
+            'origin_data.customer_address'=>['required'],
+            'origin_data.customer_phone'=>['required'],
+            'origin_data.customer_zip_code'=>['required'],
+            'origin_data.zone_code'=>['required'],
+            'origin_data.organization_id'=>['required','integer'],
+            'origin_data.location_id'=>['required'],
+
+
+            'destination_data'=>['required'],
+            'destination_data.customer_name'=>['required'],
+            'destination_data.customer_address'=>['required'],
+            'destination_data.customer_phone'=>['required'],
+            'destination_data.customer_zip_code'=>['required'],
+            'destination_data.zone_code'=>['required'],
+            'destination_data.organization_id'=>['required','integer'],
+            'destination_data.location_id'=>['required'],
         ];
     }
 
@@ -219,6 +250,47 @@ class PackageController extends Controller{
             'top' => $request->top,
             'jenis_pelanggan' => $request->jenis_pelanggan,
             'custom_field' => json_encode($request->custom_field),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ] ;
+    }
+    protected function generateLocationData($transaction, $user){
+        return [
+            'location_id' => (String) Str::uuid(),
+            'name' => $user,
+            'type' => 'Source',
+            'code' => $transaction->transaction_code,
+            'transaction_id' => $transaction->transaction_id,
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ] ;
+    }
+    protected function generateOriginData($request,$transaction){
+        return [
+            'customer_name'=>$request->origin_data['customer_name'],
+            'customer_address'=>$request->origin_data['customer_address'],
+            'customer_email'=>$request->origin_data['customer_email'],
+            'customer_phone'=>$request->origin_data['customer_phone'],
+            'customer_address_detail'=>$request->origin_data['customer_address_detail'],
+            'customer_zip_code'=>$request->origin_data['customer_zip_code'],
+            'zone_code'=>$request->origin_data['zone_code'],
+            'organization_id'=>$request->origin_data['organization_id'],
+            'location_id'=>(String) Str::uuid(),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ] ;
+    }
+    protected function generateDestinationData($request,$transaction){
+        return [
+            'customer_name'=>$request->destination_data['customer_name'],
+            'customer_address'=>$request->destination_data['customer_address'],
+            'customer_email'=>$request->destination_data['customer_email'],
+            'customer_phone'=>$request->destination_data['customer_phone'],
+            'customer_address_detail'=>$request->destination_data['customer_address_detail'],
+            'customer_zip_code'=>$request->destination_data['customer_zip_code'],
+            'zone_code'=>$request->destination_data['zone_code'],
+            'organization_id'=>$request->destination_data['organization_id'],
+            'location_id'=>(String) Str::uuid(),
             'created_at' => Carbon::now(),
             'updated_at' => Carbon::now(),
         ] ;
