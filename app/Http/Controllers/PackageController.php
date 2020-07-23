@@ -76,7 +76,8 @@ class PackageController extends Controller{
             DB::table('koli_data')->insert($this->generateKoliData($request->koli_data,$connote));
 
 //            Insert Locations Data
-            DB::table('locations')->insert($this->generateLocationData($transaction, $customer->customer_name));
+            DB::table('locations')->insert($this->generateLocationData($customer->customer_name,'Origin',
+                $transaction->transaction_code,$transaction->transaction_id));
 
 //            Insert Origin Data
             DB::table('origin_data')->insertGetId($this->generateOriginData($request,$transaction));
@@ -125,13 +126,137 @@ class PackageController extends Controller{
 //            Get Destination Data
             $transactions->destination_data =  $transactions->destination_data->first();
 
+            $transactions->currentLocation->first();
+
             return RB::success($transactions, ApiCode::SUCCESS_OK);
         }
         return RB::error(ApiCode::SUCCESS_NO_CONTENT, ['error' => 'No Data'],['error_message'=>'No Data']);
     }
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Transactions  $transactions
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), $this->postRule(true));
 
-    protected function postRule(){
-        return [
+        if ($validator->fails()){
+            return RB::error(
+                ApiCode::CLIENT_PRECONDITION_FAILED,
+                ['error' => 'Invalid Post Data'],
+                ['error_message'=>$validator->messages()->toArray()]
+            );
+        }
+
+        $user = auth()->user();
+        $customer = $user->customer_id()->first();
+        DB::beginTransaction();
+        try {
+//        Update Transaction Data
+            DB::table('transactions')->where('id',$id)->update($this->generateTransactionData($request,$user,
+                true));
+            $transaction = Transactions::find($id);
+
+//            Update Connotes Data
+            $connoteID = $transaction->connotes->id;
+            DB::table('connotes')->where('id',$connoteID)->update
+            ($this->generateConnotesData($request,
+                $transaction,true));
+
+//            Update Origin Data
+            DB::table('origin_data')->where('id',$transaction->origin_data->id)->update($this->generateOriginData
+            ($request,$transaction,true));
+
+//            Update Destination Data
+            DB::table('destination_data')->where('id',$transaction->destination_data->id)->update
+            ($this->generateDestinationData($request,$transaction,true));
+
+//            Commit if no error
+            DB::commit();
+            return RB::success($transaction, ApiCode::SUCCESS_OK);
+
+        } catch (\Exception $e) {
+//            Rollback if something wrong with query
+            DB::rollback();
+            return RB::error(ApiCode::CLIENT_BAD_REQUEST, ['error' => 'Failed Post Data'],['error_message'=>$e->getMessage()]);
+        }
+        return RB::error(ApiCode::CLIENT_BAD_REQUEST, ['error' => 'Failed Post Data'],['error_message'=>'Failed Post Data']);
+    }
+
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Transactions  $transactions
+     * @return \Illuminate\Http\Response
+     */
+    public function updateTracking(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), [
+            'name'=>['required'],
+            'type'=>['required'],
+            'code'=>['required']
+        ]);
+
+        if ($validator->fails()){
+            return RB::error(
+                ApiCode::CLIENT_PRECONDITION_FAILED,
+                ['error' => 'Invalid Post Data'],
+                ['error_message'=>$validator->messages()->toArray()]
+            );
+        }
+
+        $agent = auth()->user()->hasRole('Admin');
+        if (!$agent){
+
+            return RB::error(ApiCode::CLIENT_FORBIDDEN, ['error' => 'Forbidden'],['error_message'=>'Forbidden! Only Agent can access this API!']);
+        }
+        DB::beginTransaction();
+        try {
+            $transaction = Transactions::find($id);
+
+//            Insert Location Data
+            DB::table('locations')->insert($this->generateLocationData($request->name,$request->type,
+                $request->code,$transaction->transaction_id));
+
+//            Commit if no error
+            DB::commit();
+            return RB::success($transaction, ApiCode::SUCCESS_OK);
+
+        } catch (\Exception $e) {
+//            Rollback if something wrong with query
+            DB::rollback();
+            return RB::error(ApiCode::CLIENT_BAD_REQUEST, ['error' => 'Failed Post Data'],['error_message'=>$e->getMessage()]);
+        }
+        return RB::error(ApiCode::CLIENT_BAD_REQUEST, ['error' => 'Failed Post Data'],['error_message'=>'Failed Post Data']);
+    }
+
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  \App\Transactions  $transactions
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy($id)
+    {
+        $transaction = Transactions::find($id);
+        if ($transaction->delete()){
+            return RB::success($transaction, ApiCode::SUCCESS_OK);
+        }else{
+            return RB::error(
+                ApiCode::CLIENT_PRECONDITION_FAILED,
+                ['error' => 'Invalid Post Data'],
+                ['error_message'=>"Failed delete Data"]
+            );
+        }
+    }
+    protected function postRule($update=false){
+        $ret =[
 //            Transaction Validation
             'transaction_amount' => ['required'],
             'transaction_payment_type' => ['required','integer'],
@@ -191,15 +316,18 @@ class PackageController extends Controller{
             'destination_data.organization_id'=>['required','integer'],
             'destination_data.location_id'=>['required'],
         ];
+        if ($update){
+            unset($ret['koli_data']);
+        }
+        return $ret;
     }
 
-    protected function generateConnotesData($request, $transaction){
+    protected function generateConnotesData($request, $transaction,$update=false){
 
         $uuidConnotes = (String) Str::uuid();
         $id=sprintf("%03d", $transaction->id);
         $AWB = "AWB".$id.date('dmY');
-
-        return  [
+        $ret =[
             "connote_id"=> $uuidConnotes,
             "connote_number"=> $request->connote['connote_number'],
             "connote_service"=> $request->connote['connote_service'],
@@ -231,10 +359,16 @@ class PackageController extends Controller{
             'created_at' => Carbon::now(),
             'updated_at' => Carbon::now(),
         ];
+
+        if ($update){
+            unset($ret['created_at']);
+            unset($ret['transaction_id']);
+        }
+        return  $ret;
     }
 
-    protected function generateTransactionData($request,$user){
-        return [
+    protected function generateTransactionData($request,$user,$update=false){
+        $ret = [
             'transaction_id' => (String) Str::uuid(),
             'user_id' => $user->id,
             'transaction_amount' => $request->transaction_amount,
@@ -252,21 +386,32 @@ class PackageController extends Controller{
             'custom_field' => json_encode($request->custom_field),
             'created_at' => Carbon::now(),
             'updated_at' => Carbon::now(),
-        ] ;
+        ];
+        if ($update){
+            unset($ret['created_at']);
+            unset($ret['transaction_id']);
+        }
+        return $ret ;
     }
-    protected function generateLocationData($transaction, $user){
-        return [
+    protected function generateLocationData($name ,$type,$code, $transactionID, $update=false){
+        $ret = [
             'location_id' => (String) Str::uuid(),
-            'name' => $user,
-            'type' => 'Source',
-            'code' => $transaction->transaction_code,
-            'transaction_id' => $transaction->transaction_id,
+            'name' => $name,
+            'type' => $type,
+            'code' => $code,
+            'transaction_id' => $transactionID,
             'created_at' => Carbon::now(),
             'updated_at' => Carbon::now(),
         ] ;
+        if ($update){
+            unset($ret['created_at']);
+            unset($ret['transaction_id']);
+        }
+        return $ret;
     }
-    protected function generateOriginData($request,$transaction){
-        return [
+    protected function generateOriginData($request,$transaction,$update=false){
+        $ret = [
+            'transaction_id'=>$transaction->transaction_id,
             'customer_name'=>$request->origin_data['customer_name'],
             'customer_address'=>$request->origin_data['customer_address'],
             'customer_email'=>$request->origin_data['customer_email'],
@@ -278,10 +423,17 @@ class PackageController extends Controller{
             'location_id'=>(String) Str::uuid(),
             'created_at' => Carbon::now(),
             'updated_at' => Carbon::now(),
-        ] ;
+        ];
+
+        if ($update){
+            unset($ret['created_at']);
+            unset($ret['transaction_id']);
+        }
+        return  $ret;
     }
-    protected function generateDestinationData($request,$transaction){
-        return [
+    protected function generateDestinationData($request,$transaction, $update=false){
+        $ret = [
+            'transaction_id'=>$transaction->transaction_id,
             'customer_name'=>$request->destination_data['customer_name'],
             'customer_address'=>$request->destination_data['customer_address'],
             'customer_email'=>$request->destination_data['customer_email'],
@@ -294,8 +446,13 @@ class PackageController extends Controller{
             'created_at' => Carbon::now(),
             'updated_at' => Carbon::now(),
         ] ;
+        if ($update){
+            unset($ret['created_at']);
+            unset($ret['transaction_id']);
+        }
+        return $ret;
     }
-    protected function generateKoliData($request, $connote){
+    protected function generateKoliData($request, $connote,$update=false){
 
         $ret = [];
         foreach ($request as $key=>$val){
@@ -314,7 +471,9 @@ class PackageController extends Controller{
             $ret[$key]["koli_id"]= (String) Str::uuid();
             $ret[$key]["koli_custom_field"]= json_encode($val["koli_custom_field"]);
             $ret[$key]["koli_code"]= $connote->connote_code.".".$koliAwb;
-            $ret[$key]["created_at"] = Carbon::now();
+            if (!$update) {
+                $ret[$key]["created_at"] = Carbon::now();
+            }
             $ret[$key]["updated_at"] = Carbon::now();
         }
         return $ret;

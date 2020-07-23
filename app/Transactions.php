@@ -20,4 +20,12 @@ class Transactions extends Model
     {
         return $this->hasOne(DestinationData::class,'transaction_id','transaction_id');
     }
+    public function location()
+    {
+        return $this->hasMany(Locations::class,'transaction_id','transaction_id');
+    }
+    public function currentLocation()
+    {
+        return $this->hasOne(Locations::class,'transaction_id','transaction_id')->latest();
+    }
 }

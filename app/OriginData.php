@@ -6,6 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class OriginData extends Model
 {
-    protected $table = 'locations';
+    protected $table = 'origin_data';
     public $timestamps = true;
 }

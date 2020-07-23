@@ -11,6 +11,7 @@ class CreateOriginDataTable extends Migration
         Schema::create('origin_data', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->string('customer_name');
+            $table->string('transaction_id');
             $table->string('customer_address');
             $table->string('customer_email')->nullable();
             $table->string('customer_phone');

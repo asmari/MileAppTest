@@ -37,6 +37,9 @@ Route::group([
     Route::get('/', 'PackageController@index')->name('package');
     Route::get('/{id}', 'PackageController@show')->name('package-detail');
     Route::post('/', 'PackageController@store')->name('package-post');
+    Route::put('/{id}', 'PackageController@update')->name('package-put');
+    Route::patch('/{id}', 'PackageController@updateTracking')->name('package-patch');
+    Route::delete('/{id}', 'PackageController@destroy')->name('package-delete');
 });
 
 //ORGANIZATION
