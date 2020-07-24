@@ -153,12 +153,19 @@ class PackageController extends Controller{
 
         $user = auth()->user();
         $customer = $user->customer_id()->first();
+        $transaction = Transactions::find($id);
+        if (!$transaction){
+            return RB::error(
+                ApiCode::CLIENT_PRECONDITION_FAILED,
+                ['error' => 'Invalid Post Data'],
+                ['error_message' => "Failed delete Data"]
+            );
+        }
         DB::beginTransaction();
         try {
 //        Update Transaction Data
             DB::table('transactions')->where('id',$id)->update($this->generateTransactionData($request,$user,
                 true));
-            $transaction = Transactions::find($id);
 
 //            Update Connotes Data
             $connoteID = $transaction->connotes->id;
