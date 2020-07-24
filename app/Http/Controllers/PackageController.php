@@ -25,7 +25,7 @@ class PackageController extends Controller{
 //        Get all Transaction by user_id
         $transactions = Transactions::where('user_id',$user->id)
             ->orderBy('id','desc')
-            ->paginate(env('PAGINATION')?:10)
+            ->paginate(env('PAGINATION')?:2)
             ->toArray();
 
         if ($transactions){
@@ -245,15 +245,23 @@ class PackageController extends Controller{
     public function destroy($id)
     {
         $transaction = Transactions::find($id);
-        if ($transaction->delete()){
-            return RB::success($transaction, ApiCode::SUCCESS_OK);
-        }else{
-            return RB::error(
-                ApiCode::CLIENT_PRECONDITION_FAILED,
-                ['error' => 'Invalid Post Data'],
-                ['error_message'=>"Failed delete Data"]
-            );
+        if ($transaction) {
+            if ($transaction->delete()) {
+                return RB::success($transaction, ApiCode::SUCCESS_OK);
+            } else {
+                return RB::error(
+                    ApiCode::CLIENT_PRECONDITION_FAILED,
+                    ['error' => 'Invalid Post Data'],
+                    ['error_message' => "Failed delete Data"]
+                );
+            }
         }
+
+        return RB::error(
+            ApiCode::CLIENT_NOT_FOUND,
+            ['error' => 'Transaction Data Not Found'],
+            ['error_message' => "Transaction Data Not Found"]
+        );
     }
     protected function postRule($update=false){
         $ret =[
