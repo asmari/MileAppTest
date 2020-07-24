@@ -1,5 +1,6 @@
 <?php
 
+use App\Organizations;
 use Illuminate\Database\Seeder;
 
 class OrganizationsSeeder extends Seeder
@@ -11,6 +12,9 @@ class OrganizationsSeeder extends Seeder
      */
     public function run()
     {
-        //
+        $user = Organizations::create([
+            'name' => 'Organization A',
+            'description' => 'Description A',
+        ]);
     }
 }
