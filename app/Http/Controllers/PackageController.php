@@ -254,7 +254,7 @@ class PackageController extends Controller{
         $transaction = Transactions::find($id);
         if ($transaction) {
             if ($transaction->delete()) {
-                return RB::success($transaction, ApiCode::SUCCESS_OK);
+                return RB::success(['message'=>'Delete Successfully'], ApiCode::SUCCESS_OK);
             } else {
                 return RB::error(
                     ApiCode::CLIENT_PRECONDITION_FAILED,
